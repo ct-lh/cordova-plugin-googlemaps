@@ -1,26 +1,31 @@
 package plugin.google.maps;
 
 import android.os.Bundle;
+import android.util.Log;
 
 import org.apache.cordova.CallbackContext;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.w3c.dom.Attr;
+import org.w3c.dom.Document;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import za.co.twyst.tbxml.TBXML;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 
 public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
+  private String Tag = "PluginKmlOverlay";
   private HashMap<String, Bundle> styles = new HashMap<String, Bundle>();
 
   private enum KML_TAG {
@@ -59,6 +64,7 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
         try {
           urlStr = opts.getString("url");
         } catch (JSONException e) {
+          Log.e(Tag, e.getMessage());
           e.printStackTrace();
         }
         if (urlStr == null || urlStr.length() == 0) {
@@ -139,76 +145,71 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
 //        }
 //      }
 
-
-      String line;
-      StringBuilder stringBuilder = new StringBuilder();
-      InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
-      BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
-      while ((line = bufferedReader.readLine()) != null) {
-        stringBuilder.append(line);
-        stringBuilder.append("\n");
-      }
-      bufferedReader.close();
-
-
-      TBXML tbxml = new TBXML();
-      tbxml.parse(stringBuilder.toString());
+      DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
+      DocumentBuilder docBuilder = docBuilderFactory.newDocumentBuilder();
+      Document document = docBuilder.parse(inputStream);
 
       KmlParserClass parser = new KmlParserClass();
-      Bundle root = parser.parseXml(tbxml, tbxml.rootXMLElement());
+      Bundle root = parser.parseXml(document.getDocumentElement());
       Bundle result = new Bundle();
       result.putBundle("schemas", parser.schemaHolder);
       result.putBundle("styles", parser.styleHolder);
       result.putBundle("root", root);
 
-
-      tbxml.release();
-      inputStreamReader.close();
       inputStream.close();
       inputStream = null;
       return result;
     } catch (Exception e) {
+      Log.e(Tag, e.getMessage());
       e.printStackTrace();
       return null;
     }
   }
 
   class KmlParserClass {
+    private String Tag = "KmlParserClass";
     public Bundle styleHolder = new Bundle();
     public Bundle schemaHolder = new Bundle();
 
 
-    private Bundle parseXml(TBXML tbxml, long rootElement) {
+    private Bundle parseXml(Node rootNode) {
+      // Exclude text nodes
+      if (rootNode != null && rootNode.getNodeType() == Node.TEXT_NODE) {
+        return null;
+      }
+
       Bundle result = new Bundle();
-      String styleId, schemaId, txt, attrName;
+      String styleId, schemaId, txt;
       int i;
-      String tagName = tbxml.elementName(rootElement).toLowerCase();
-      long childNode;
+      String tagName = rootNode.getNodeName().toLowerCase();
+      Node childNode;
       Bundle styles, schema, extendedData;
       ArrayList<Bundle> children;
       ArrayList<String> styleIDs;
 
-      //Log.d(TAG, "--->tagName = " + tagName + "(" + rootElement + ")");
       result.putString("tagName", tagName);
 
       KML_TAG kmlTag = null;
       try {
         kmlTag = KML_TAG.valueOf(tagName);
       } catch(Exception e) {
+//        Log.e(Tag, e.getMessage());
         kmlTag = KML_TAG.NOT_SUPPORTED;
       }
 
-      long[] attributes = tbxml.listAttributesOfElement(rootElement);
-      for (i = 0; i < attributes.length; i++) {
-        attrName = tbxml.attributeName(attributes[i]);
-        result.putString(attrName, tbxml.attributeValue(attributes[i]));
-      }
+      NamedNodeMap attributes = rootNode.getAttributes();
 
+      if (attributes != null) {
+        for (int j = 0; j < attributes.getLength(); j++) {
+          Attr attr = (Attr) attributes.item(j);
+          result.putString(attr.getNodeName(), attr.getNodeValue());
+        }
+      }
 
       switch (kmlTag) {
 
         case styleurl:
-          styleId = tbxml.textForElement(rootElement);
+          styleId = rootNode.getTextContent();
           result.putString("styleId", styleId);
           break;
 
@@ -216,18 +217,20 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
         case style:
 
           // Generate a style id for the tag
-          styleId = tbxml.valueOfAttributeNamed("id", rootElement);
+          Attr styleAttr = (Attr) rootNode.getAttributes().getNamedItem("id");
+          styleId = styleAttr != null ? styleAttr.getValue() : null;
           if (styleId == null || styleId.isEmpty()) {
-            styleId = "__" + rootElement + "__";
+            styleId = "__" + rootNode + "__";
           }
           result.putString("styleId", styleId);
 
           // Store style information into the styleHolder.
           styles = new Bundle();
           children = new ArrayList<Bundle>();
-          childNode = tbxml.firstChild(rootElement);
-          while (childNode > 0) {
-            Bundle node = this.parseXml(tbxml, childNode);
+          childNode = rootNode.getFirstChild();
+
+          while (childNode != null) {
+            Bundle node = this.parseXml(childNode);
             if (node != null) {
               if (node.containsKey("value")) {
                 styles.putString(node.getString("tagName"), node.getString("value"));
@@ -235,7 +238,7 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
                 children.add(node);
               }
             }
-            childNode = tbxml.nextSibling(childNode);
+            childNode = childNode.getNextSibling();
           }
           if (children.size() > 0) {
             styles.putParcelableArrayList("children", children);
@@ -248,22 +251,25 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
         case schema:
 
           // Generate a schema id for the tag
-          schemaId = tbxml.valueOfAttributeNamed("id", rootElement);
+          Attr schemaAttr = (Attr) rootNode.getAttributes().getNamedItem("id");
+          schemaId = schemaAttr != null ? schemaAttr.getValue() : null;
           if (schemaId == null || schemaId.isEmpty()) {
-            schemaId = "__" + rootElement + "__";
+            schemaId = "__" + rootNode + "__";
           }
 
           // Store schema information into the schemaHolder.
           schema = new Bundle();
-          schema.putString("name", tbxml.valueOfAttributeNamed("name", rootElement));
+
+          Attr schemaNameAttr = (Attr) rootNode.getAttributes().getNamedItem("name");
+          schema.putString("name", schemaNameAttr != null ? schemaNameAttr.getValue() : "");
           children = new ArrayList<Bundle>();
-          childNode = tbxml.firstChild(rootElement);
-          while (childNode > 0) {
-            Bundle node = this.parseXml(tbxml, childNode);
+          childNode = rootNode.getFirstChild();
+          while (childNode != null) {
+            Bundle node = this.parseXml(childNode);
             if (node != null) {
               children.add(node);
             }
-            childNode = tbxml.nextSibling(childNode);
+            childNode = childNode.getNextSibling();
           }
           if (children.size() > 0) {
             schema.putParcelableArrayList("children", children);
@@ -277,7 +283,7 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
 
           ArrayList<Bundle> latLngList = new ArrayList<Bundle>();
 
-          txt = tbxml.textForElement(rootElement);
+          txt = rootNode.getTextContent();
           txt = txt.replaceAll("\\s+", "\n");
           txt = txt.replaceAll("\\n+", "\n");
           String lines[] = txt.split("\n");
@@ -301,11 +307,23 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
 
         default:
 
-          childNode = tbxml.firstChild(rootElement);
-          if (childNode != 0) {
+          childNode = rootNode.getFirstChild();
+          boolean hasMoreThanText = false;
+
+          while (childNode != null) {
+            if (childNode.getNodeType() != Node.TEXT_NODE) {
+              hasMoreThanText = true;
+              break;
+            }
+            childNode = childNode.getNextSibling();
+          }
+
+          if (hasMoreThanText) {
+            childNode = rootNode.getFirstChild();
             children = new ArrayList<Bundle>();
-            while (childNode != 0) {
-              Bundle node = this.parseXml(tbxml, childNode);
+
+            while (childNode != null) {
+              Bundle node = this.parseXml(childNode);
               if (node != null) {
                 if (node.containsKey("styleId")) {
                   //--------------------------------------------
@@ -323,12 +341,12 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
                   children.add(node);
                 }
               }
-              childNode = tbxml.nextSibling(childNode);
+              childNode = childNode.getNextSibling();
             }
 
             result.putParcelableArrayList("children", children);
           } else {
-            result.putString("value", tbxml.textForElement(rootElement));
+            result.putString("value", rootNode.getTextContent());
           }
           break;
       }
@@ -342,7 +360,7 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
 
     InputStream inputStream;
     try {
-      //Log.d("PluginKmlOverlay", "---> url = " + urlStr);
+//      Log.e("PluginKmlOverlay", "---> url = " + urlStr);
       if (urlStr.startsWith("http://") || urlStr.startsWith("https://")) {
         URL url = new URL(urlStr);
         boolean redirect = true;
@@ -390,15 +408,14 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
           boolean isAbsolutePath = urlStr.startsWith("/");
           File relativePath = new File(urlStr);
           urlStr = relativePath.getCanonicalPath();
-          //Log.d(TAG, "imgUrl = " + imgUrl);
           if (!isAbsolutePath) {
             urlStr = urlStr.substring(1);
           }
-          //Log.d(TAG, "imgUrl = " + imgUrl);
         } catch (Exception e) {
+          Log.e(Tag, e.getMessage());
           e.printStackTrace();
         }
-        //Log.d("PluginKmlOverlay", "---> url = " + urlStr);
+//        Log.e("PluginKmlOverlay", "---> url = " + urlStr);
         inputStream = new FileInputStream(urlStr);
       } else {
         if (urlStr.indexOf("file:///android_asset/") == 0) {
@@ -410,19 +427,19 @@ public class PluginKmlOverlay extends MyPlugin implements MyPluginInterface {
           boolean isAbsolutePath = urlStr.startsWith("/");
           File relativePath = new File(urlStr);
           urlStr = relativePath.getCanonicalPath();
-          //Log.d(TAG, "imgUrl = " + imgUrl);
           if (!isAbsolutePath) {
             urlStr = urlStr.substring(1);
           }
-          //Log.d(TAG, "imgUrl = " + imgUrl);
         } catch (Exception e) {
+          Log.e(Tag, e.getMessage());
           e.printStackTrace();
         }
-        //Log.d("PluginKmlOverlay", "---> url = " + urlStr);
+//        Log.e("PluginKmlOverlay", "---> url = " + urlStr);
         inputStream = cordova.getActivity().getResources().getAssets().open(urlStr);
       }
 
     } catch (Exception e) {
+      Log.e(Tag, e.getMessage());
       e.printStackTrace();
       return null;
     }
