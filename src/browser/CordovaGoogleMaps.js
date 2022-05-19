@@ -11,14 +11,10 @@ var MAPS = {};
 var API_LOADED_STATUS = 0; // 0: not loaded, 1: loading, 2: completed
 
 document.addEventListener('load_googlemaps', function() {
-  var envOptions = Environment._getEnv();
-  var API_KEY_FOR_BROWSER;
-  if (envOptions) {
-    if (location.protocol === 'https:') {
-      API_KEY_FOR_BROWSER = envOptions.API_KEY_FOR_BROWSER_RELEASE;
-    } else {
-      API_KEY_FOR_BROWSER = envOptions.API_KEY_FOR_BROWSER_DEBUG;
-    }
+  if (location.protocol === 'https:') { // Enviorment was not accessable for unknown reasons
+    API_KEY_FOR_BROWSER = localStorage.getItem('API_KEY_FOR_BROWSER_RELEASE');
+  } else {
+    API_KEY_FOR_BROWSER = localStorage.getItem('API_KEY_FOR_BROWSER_DEBUG');
   }
   API_LOADED_STATUS = 1;
 
@@ -68,6 +64,7 @@ var CordovaGoogleMaps = {
   resume: stub,
   pause: stub,
   getMap: function(onSuccess, onError, args) {
+    console.log('GetMap Browser')
     // memory cleanup
     var mapIDs = Object.keys(MAPS);
     mapIDs.forEach(function(mapId) {
