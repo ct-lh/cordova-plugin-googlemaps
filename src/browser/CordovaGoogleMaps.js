@@ -68,7 +68,6 @@ var CordovaGoogleMaps = {
   resume: stub,
   pause: stub,
   getMap: function(onSuccess, onError, args) {
-    console.log('GetMap Browser')
     // memory cleanup
     var mapIDs = Object.keys(MAPS);
     mapIDs.forEach(function(mapId) {
