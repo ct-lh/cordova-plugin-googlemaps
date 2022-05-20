@@ -1,4 +1,5 @@
-var common = require('./Common');
+var common = require('./Common'),
+    execProxy = require('cordova/exec/proxy');
 
 /*****************************************************************************
  * Config Class
@@ -6,11 +7,11 @@ var common = require('./Common');
 var Environment = {};
 
 Environment.setBackgroundColor = function (color) {
-  cordova.exec(null, null, 'PluginEnvironment', 'setBackGroundColor', [common.HTMLColor2RGBA(color)]);
+  execProxy.get('PluginEnvironment', 'setBackGroundColor')(() => {}, () => {}, [common.HTMLColor2RGBA(color)]);
 };
 
 Environment.isAvailable = function (callback) {
-  cordova.exec(function () {
+  execProxy.get('PluginEnvironment',  'isAvailable')(function () {
     if (typeof callback === 'function') {
       callback(true);
     }
@@ -18,18 +19,18 @@ Environment.isAvailable = function (callback) {
     if (typeof callback === 'function') {
       callback(false, message);
     }
-  }, 'PluginEnvironment', 'isAvailable', ['']);
+  }, ['']);
 };
 
 Environment.getLicenseInfo = function (callback) {
-  cordova.exec(function (txt) {
+  execProxy.get('PluginEnvironment', 'getLicenseInfo')(function (txt) {
     callback(txt);
-  }, null, 'PluginEnvironment', 'getLicenseInfo', []);
+  }, () => {}, []);
 };
 
 Environment.setEnv = function (options) {
   if (options) {
-    cordova.exec(null, null, 'PluginEnvironment', 'setEnv', [options]);
+    execProxy.get('PluginEnvironment', 'setEnv')(() => {}, () => {}, [options]);
   }
 };
 
