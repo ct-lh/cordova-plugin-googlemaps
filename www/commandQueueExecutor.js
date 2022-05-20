@@ -229,10 +229,10 @@ const execute = function (success, fail, service, action, args) {
           };
           proxy(onSuccess, onError, args);
       } catch (e) {
-          console.log('Exception calling native with command :: ' + service + ' :: ' + action + ' ::exception=' + e);
+          console.log('[GoogleMaps] Exception calling native with command :: ' + service + ' :: ' + action + ' ::exception=' + e);
       }
   } else {
-      console.log('Error: exec proxy not found for :: ' + service + ' :: ' + action);
+      console.log('[GoogleMaps] Error: exec proxy not found for :: ' + service + ' :: ' + action);
 
       if (typeof fail === 'function') {
           fail('Missing Command Error');
