@@ -8,6 +8,7 @@ function PluginKmlOverlay() {
 }
 
 PluginKmlOverlay.prototype._create = function(onSuccess, onError, args) {
+  console.log('create', args);
   var pluginOptions = args[1];
 
   if (!/^https?:/.test(location.protocol)) {
@@ -18,26 +19,38 @@ PluginKmlOverlay.prototype._create = function(onSuccess, onError, args) {
   // Parse the xml file using WebWorker
   //-------------------------------------
   var worker = new InlineWorker(loadKml);
+
   worker.onmessage = function(evt) {
-    //console.log('host message', evt.data);
+    console.log('worker.onmessage', evt)
+    //console.log('host message', evt.data);kmloptions 
     worker.terminate();
     onSuccess(evt.data);
   };
   worker.onerror = onError;
-  var link = document.createElement('a');
-  link.href = pluginOptions.url;
-  var url = link.protocol+'//'+link.host+link.pathname+link.search;
-  worker.postMessage({
-    'url': url
-  });
+  if (pluginOptions.url.substr(0, 5) !== '<?xml') {
+    var link = document.createElement('a');
+    link.href = pluginOptions.url;
+    var url = link.protocol+'//'+link.host+link.pathname+link.search;
+    worker.postMessage({
+      'url': url
+    });
+  } else {
+    worker.postMessage({
+      'url': pluginOptions.url
+    });
+  }
+
+
 };
 
 module.exports = PluginKmlOverlay;
 
 function loadKml(self) {
+  console.log('loadKml')
 
   // code: https://stackoverflow.com/q/32912732/697856
   var createCORSRequest = function(method, url, asynch) {
+    console.log('createCORSRequest')
     var xhr = new XMLHttpRequest();
     if ('withCredentials' in xhr) {
       // XHR for Chrome/Firefox/Opera/Safari.
@@ -464,6 +477,8 @@ function loadKml(self) {
   KmlParserClass.prototype._default = function(rootElement) {
     var _parser = this,
       result = {};
+
+    console.log('rootElement', rootElement);
     if (!rootElement.value) {
       return null;
     }
@@ -500,6 +515,8 @@ function loadKml(self) {
 
   self.onmessage = function(evt) {
     var params = evt.data;
+    console.log('onmessage', params);
+
     //------------------------------------------
     // Load & parse kml file in WebWorker
     //------------------------------------------
@@ -507,6 +524,12 @@ function loadKml(self) {
       //-----------------
       // Read XML file
       //-----------------
+      console.log(params.url);
+      if (params.url.substr(0, 5) === '<?xml') {
+        resolve(params.url);
+        return;
+      }
+
       var xhr = createCORSRequest('GET', params.url, true);
       if (xhr) {
         xhr.onreadystatechange = function() {
