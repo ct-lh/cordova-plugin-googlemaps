@@ -1009,6 +1009,7 @@ Map.prototype.setPadding = function(p1, p2, p3, p4) {
 
 
 Map.prototype.addKmlOverlay = function(kmlOverlayOptions, callback) {
+  console.log('addKmlOverlay', kmlOverlayOptions);
   var self = this;
   kmlOverlayOptions = kmlOverlayOptions || {};
   kmlOverlayOptions.url = kmlOverlayOptions.url || null;
@@ -1016,11 +1017,12 @@ Map.prototype.addKmlOverlay = function(kmlOverlayOptions, callback) {
   kmlOverlayOptions.suppressInfoWindows = kmlOverlayOptions.suppressInfoWindows === true;
 
   if (kmlOverlayOptions.url) {
-
-    var link = document.createElement('a');
-    link.href = kmlOverlayOptions.url;
-    kmlOverlayOptions.url = link.protocol+'//'+link.host+link.pathname + link.search;
-
+    if (kmlOverlayOptions.url.substr(0, 5) !== '<?xml') {
+      var link = document.createElement('a');
+      link.href = kmlOverlayOptions.url;
+      kmlOverlayOptions.url = link.protocol+'//'+link.host+link.pathname + link.search;
+    }
+    
     var invisible_dot = self.get('invisible_dot');
     if (!invisible_dot || invisible_dot._isRemoved) {
       // Create an invisible marker for kmlOverlay
